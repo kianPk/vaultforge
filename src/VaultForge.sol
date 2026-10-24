@@ -37,9 +37,12 @@ contract VaultForge is ERC4626, AccessControl, Pausable, ReentrancyGuard {
     uint16 public debtRatioBps;
     /// @notice High-water share price (1e18 scale) for reporting.
     uint256 public highWaterSharePrice;
+    /// @notice Max acceptable NAV drop on harvest in bps (0 = disabled). Reverts if strategy loses more.
+    uint16 public maxHarvestLossBps;
 
     event StrategyUpdated(address indexed previous, address indexed next);
     event Harvested(uint256 profit, uint256 fee, uint256 timestamp);
+    event HarvestLossGuardUpdated(uint16 bps);
     event PerformanceFeeUpdated(uint16 bps);
     event FeeRecipientUpdated(address indexed recipient);
     event Allocated(uint256 amount);
@@ -54,6 +57,7 @@ contract VaultForge is ERC4626, AccessControl, Pausable, ReentrancyGuard {
     error ZeroAmount();
     error DepositCapExceeded();
     error InvalidDebtRatio();
+    error HarvestLossExceeded();
 
     constructor(
         IERC20 asset_,
@@ -209,7 +213,13 @@ contract VaultForge is ERC4626, AccessControl, Pausable, ReentrancyGuard {
         uint256 beforeAssets = totalAssets();
         strategy.harvest();
         uint256 afterAssets = totalAssets();
-        if (afterAssets > beforeAssets) {
+        if (afterAssets < beforeAssets) {
+            if (maxHarvestLossBps != 0) {
+                uint256 lost = beforeAssets - afterAssets;
+                uint256 maxLoss = (beforeAssets * maxHarvestLossBps) / 10_000;
+                if (lost > maxLoss) revert HarvestLossExceeded();
+            }
+        } else if (afterAssets > beforeAssets) {
             profit = afterAssets - beforeAssets;
             fee = (profit * performanceFeeBps) / 10_000;
             if (fee > 0) {
@@ -220,6 +230,12 @@ contract VaultForge is ERC4626, AccessControl, Pausable, ReentrancyGuard {
             totalHarvested += profit;
         }
         emit Harvested(profit, fee, block.timestamp);
+    }
+
+    function setMaxHarvestLossBps(uint16 bps) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (bps > 2000) revert InvalidFee();
+        maxHarvestLossBps = bps;
+        emit HarvestLossGuardUpdated(bps);
     }
 
     function setPerformanceFeeBps(uint16 bps) external onlyRole(DEFAULT_ADMIN_ROLE) {
