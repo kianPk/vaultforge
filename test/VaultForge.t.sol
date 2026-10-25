@@ -114,6 +114,31 @@ contract VaultForgeTest is Test {
         vm.stopPrank();
     }
 
+    function test_strategyCapBlocksAllocate() public {
+        vm.startPrank(alice);
+        asset.approve(address(vault), 100_000e6);
+        vault.deposit(100_000e6, alice);
+        vm.stopPrank();
+
+        vm.prank(admin);
+        vault.setStrategyCap(50_000e6);
+
+        vm.prank(admin);
+        vm.expectRevert(VaultForge.StrategyCapExceeded.selector);
+        vault.allocate(60_000e6);
+
+        vm.prank(admin);
+        vault.allocate(50_000e6);
+        assertEq(vault.deployedAssets(), 50_000e6);
+    }
+
+    function test_setStrategyCapEmitsEvent() public {
+        vm.expectEmit(true, true, true, true);
+        emit VaultForge.StrategyCapUpdated(1_000_000e6);
+        vm.prank(admin);
+        vault.setStrategyCap(1_000_000e6);
+    }
+
     function test_rebalanceHonorsDebtRatio() public {
         vm.startPrank(alice);
         asset.approve(address(vault), 100_000e6);

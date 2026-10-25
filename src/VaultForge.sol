@@ -33,6 +33,8 @@ contract VaultForge is ERC4626, AccessControl, Pausable, ReentrancyGuard {
 
     /// @notice Hard cap on totalAssets (0 = uncapped).
     uint256 public depositCap;
+    /// @notice Max assets deployable into the active strategy (0 = uncapped).
+    uint256 public strategyCap;
     /// @notice Target fraction of NAV kept in the strategy, in bps (e.g. 8000 = 80%).
     uint16 public debtRatioBps;
     /// @notice High-water share price (1e18 scale) for reporting.
@@ -45,6 +47,7 @@ contract VaultForge is ERC4626, AccessControl, Pausable, ReentrancyGuard {
     event Allocated(uint256 amount);
     event Recalled(uint256 amount);
     event DepositCapUpdated(uint256 cap);
+    event StrategyCapUpdated(uint256 cap);
     event DebtRatioUpdated(uint16 bps);
     event Rebalanced(uint256 idle, uint256 deployed, uint256 targetDeployed);
 
@@ -53,6 +56,7 @@ contract VaultForge is ERC4626, AccessControl, Pausable, ReentrancyGuard {
     error StrategyAssetMismatch();
     error ZeroAmount();
     error DepositCapExceeded();
+    error StrategyCapExceeded();
     error InvalidDebtRatio();
 
     constructor(
@@ -187,6 +191,7 @@ contract VaultForge is ERC4626, AccessControl, Pausable, ReentrancyGuard {
     function allocate(uint256 amount) external onlyRole(STRATEGIST_ROLE) nonReentrant {
         if (amount == 0) revert ZeroAmount();
         if (address(strategy) == address(0)) revert InvalidAddress();
+        _enforceStrategyCap(amount);
         IERC20(asset()).forceApprove(address(strategy), amount);
         strategy.deposit(amount);
         emit Allocated(amount);
@@ -239,6 +244,16 @@ contract VaultForge is ERC4626, AccessControl, Pausable, ReentrancyGuard {
         emit DepositCapUpdated(cap);
     }
 
+    function setStrategyCap(uint256 cap) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        strategyCap = cap;
+        emit StrategyCapUpdated(cap);
+    }
+
+    function _enforceStrategyCap(uint256 additionalDeploy) internal view {
+        if (strategyCap == 0) return;
+        if (deployedAssets() + additionalDeploy > strategyCap) revert StrategyCapExceeded();
+    }
+
     function setDebtRatioBps(uint16 bps) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (bps > 10_000) revert InvalidDebtRatio();
         debtRatioBps = bps;
@@ -256,6 +271,7 @@ contract VaultForge is ERC4626, AccessControl, Pausable, ReentrancyGuard {
             uint256 idle = idleAssets();
             uint256 move = need > idle ? idle : need;
             if (move > 0) {
+                _enforceStrategyCap(move);
                 IERC20(asset()).forceApprove(address(strategy), move);
                 strategy.deposit(move);
             }

@@ -2,6 +2,7 @@
 
 **ERC-4626 yield vault** with strategy allocation, performance fees, role-gated ops, and guardian pause — built with Foundry + OpenZeppelin.
 
+[![CI](https://github.com/kianPk/vaultforge/actions/workflows/ci.yml/badge.svg)](https://github.com/kianPk/vaultforge/actions/workflows/ci.yml)
 [![Demo](https://img.shields.io/badge/Demo-kianpk.github.io%2Fvaultforge-10b981?style=for-the-badge)](https://kianpk.github.io/vaultforge/)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.24-363636?style=for-the-badge&logo=solidity)](https://github.com/kianPk/vaultforge)
 [![Foundry](https://img.shields.io/badge/Foundry-forge-000000?style=for-the-badge)](https://book.getfoundry.sh/)
@@ -40,6 +41,7 @@ forge test --match-contract VaultForgeTest
 
 ## Also in this release
 
+- **Strategy cap** — `setStrategyCap` limits deployed NAV; enforced on `allocate` / `rebalance`
 - Deposit cap + debt-ratio `rebalance()`
 - Share price + high-water mark tracking
 - Strategist allocate / recall / harvest with performance fees
